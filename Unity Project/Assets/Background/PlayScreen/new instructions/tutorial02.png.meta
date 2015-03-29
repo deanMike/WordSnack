@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: a48e9e790eb704e6c8f9230c21a1293c
+guid: ed01eb0fdf4194c379ebc65cb4089a5a
 TextureImporter:
   fileIDToRecycleName:
     21300000: tutorial02
@@ -22,7 +22,7 @@ TextureImporter:
   grayScaleToAlpha: 0
   generateCubemap: 0
   seamlessCubemap: 0
-  textureFormat: -1
+  textureFormat: -2
   maxTextureSize: 1024
   textureSettings:
     filterMode: -1

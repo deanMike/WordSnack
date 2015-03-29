@@ -1,5 +1,5 @@
 Pause Screen Information
+-Tiles on stove and in letter bank disappear, the “No Cheating” ones are generated procedurally
 -Appears when pause button is pressed on play screen
 -Resume brings the player back to the game
--The reference image says "abort game" but the actual button is "Exit game"
--"Exit game" brings the player to the main menu and ends the game.
+-Exit Game brings them back to main menu

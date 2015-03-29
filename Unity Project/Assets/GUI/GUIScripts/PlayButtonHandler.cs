@@ -18,10 +18,18 @@ public class PlayButtonHandler : MonoBehaviour {
 	}
 
 	void OnMouseDown(){
-		if(mPlay.renderer.material.mainTexture == playUnselected){
-			mPlay.renderer.material.mainTexture = playSelected;
-		}
+		//gameObject.renderer.material.color = Color.red;
+		gameObject.renderer.material.mainTexture = playSelected;
+    }
+    void OnMouseUp()
+    {
+		//gameObject.renderer.material.color = Color.white;
+        gameObject.renderer.material.mainTexture = playUnselected;
+    }
+    void OnMouseUpAsButton(){
+       
 		buttonPressed = true;
+		PlayerPrefs.SetInt("timed",0);
 		Application.LoadLevel("CharacterSelectTest");
-	}
+    }
 }

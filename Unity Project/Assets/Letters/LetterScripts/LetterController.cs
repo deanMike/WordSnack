@@ -1,1091 +1,814 @@
 ﻿using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
+// Used for maintaining 
 public class LetterController : MonoBehaviour
 {
-	VariableControl variables = new VariableControl();
-	//	public letterBehaviour [] letterObjs;
-	//	public letterBehaviour spawnMe;
-	public letterBehaviour letterObj;
-	public letterBehaviour[] lettersOnBoard;
-	public letterBehaviour[] lettersOnStove;
-	public int[] positionOnBoard;
-	public int numLettersOnStove = 0;
-	public float timer = 0f;
-	private int boardSize;
-	public Vector3[] stoveSpots;
-	public Vector3[] bankSpots;
-	public bool needsUpkeep = true;
-	public GameObject steamPrefab;
-	public GameObject [] stoveSteam;
-	public GameObject heatPrefab;
-	public GameObject [] stoveHeat;
-	public string letters;
-	public int vowels = 0;
-	public string myLetters;
-	public bool firstHand = true;
-	int safetyCount;
-	public int vowelsAddedInCycle = 0;
-	public int next;
-	public bool[] newArraySpot;
-	public int emptyLetterCount = 0;
-	public TextAsset sowpods;
-	private List<string> wordList = new List<string>();
-	public static Dictionary<char, int> letterScores;
-	public Texture2D shuffleButton;
-	public bool gamePaused;
-	public GameObject gameController;
-	public bool needsReordering = true;
-	public int countToEndGame;
+        #region Variables
+        VariableControl variables = new VariableControl ();
+		public bool lastHand = false;
+		public bool noWordsLeft = false;
+		public letterBehaviour letterObj;
+		public letterBehaviour[] lettersOnBoard;
+		public letterBehaviour[] lettersOnStove;
+		public int[] positionOnBoard;
+		public int numLettersOnStove = 0;
+		private int boardSize;
+		public Vector3[] stoveSpots;
+		public Vector3[] bankSpots;
+		public GameObject steamPrefab;
+		public GameObject[] stoveSteam;
+		public GameObject heatPrefab;
+		public GameObject[] stoveHeat;
+		public string letters;
+		public int vowels = 0;
+		public string myLetters;
+		int safetyCount;
+		public int vowelsAddedInCycle = 0;
+		public int next;
+		public bool[] newArraySpot;
+		public int emptyLetterCount = 0;
+		public TextAsset sowpods;
+		private List<string> wordList = new List<string> ();
+		private List<string> combinationList = new List<string> ();
+		private List<string> permutationList = new List<string> ();
+		public static Dictionary<char, int> letterScores;
+		//public Texture2D shuffleButton;
+		public bool gamePaused;
+		public GameObject gameController;
+		public bool needsReordering = true;
+		public int countToEndGame;
+		public string lastWordChecked;
+		//letter tuning from Josiah 
+		private char[] vowelList = {'a', 'e', 'i', 'o', 'u'};
+		private char[] consonantList =
+	    {
+		    'b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's',
+		    't', 'v', 'w', 'x', 'y', 'z',
+	    };
+		public int numVowels;
+		public bool stopSearch = false;
 
+        #endregion
 
-	// Use this for initialization
-	void Start()
-	{
-		//initialize variablecontrol reference
-		variables = GameObject.Find ("VariableController").GetComponent<VariableControl> ();
+        // Use this for initialization
+		void Start ()
+		{
+				//initialize variablecontrol reference
+				variables = GameObject.Find ("VariableController").GetComponent<VariableControl> ();
 
-		//connects boardSize variable to the value in the variable controller
-		boardSize = variables.boardSize;
+				//connects boardSize variable to the value in the variable controller
+				boardSize = variables.boardSize;
 
-		//initialize the lettersOnBoard array as the size of the board, as letterBehaviour. Also creates array for lettersOnStove
-		lettersOnBoard = new letterBehaviour[boardSize];
-		lettersOnStove = new letterBehaviour[boardSize];
-		newArraySpot = new bool[boardSize];
-		positionOnBoard = new int[boardSize];
+				//initialize the lettersOnBoard array as the size of the board, as letterBehaviour. Also creates array for lettersOnStove
+				lettersOnBoard = new letterBehaviour[boardSize];
+				lettersOnStove = new letterBehaviour[boardSize];
+				newArraySpot = new bool[boardSize];
+				positionOnBoard = new int[boardSize];
 
-		//creates the list of valid words and letter scores
-		makeWordListAndScoreDict ();
+				//creates the list of valid words and letter scores
+				makeWordListAndScoreDict ();
 
-		//initialize all physical spots on board (as arrays of Vector3's according to amount of letters on board
-		stoveSpots = new Vector3[boardSize];
-		bankSpots = new Vector3[boardSize];
-		for (int i = 0; i < boardSize; i++) {
-			stoveSpots [i] = new Vector3 (i * 1.4f - 5.7f, -1.26f, 0);
-			bankSpots [i] = new Vector3 (i * 1.8f - 6.3f, -3.6f, 0);
-			positionOnBoard [i] = -1;
+				//initialize all physical spots on board (as arrays of Vector3's according to amount of letters on board
+				stoveSpots = new Vector3[boardSize];
+				bankSpots = new Vector3[boardSize];
+				for (int i = 0; i < boardSize; i++) {
+						stoveSpots [i] = new Vector3 (i * 1.4f - 4.6f, -1.26f, 0);
+						bankSpots [i] = new Vector3 (i * 1.8f - 6.3f, -3.6f, 0);
+						positionOnBoard [i] = -1;
+				}
+				variables.letterGenerationSound = true;
+				if (variables.iPhoneType != 1) {
+						CreateSteam ();
+				}
+				//CheckPermutations("xyzwvtxx");
 		}
-		GameObject.Find("VariableController").GetComponent<VariableControl>().letterGenerationSound = true;
-		CreateSteam ();
-	}
 
-	// Update is called once per frame
-	void Update()
-	{
-		//waits to count letters until they've been initialized 
-		if (safetyCount > 10) {
-			firstHand = false;
-			myLetters = lettersInHand();
-			vowels = countVowels();
-		} else {
-			safetyCount++;
-		}
-		//keep local time in scripts
-		timer += Time.deltaTime;
+		// Update is called once per frame
+		void Update ()
+		{
+				string word = sendWord ();
+				//check if there even is a word!
+				if (word == null || word.Length < variables.minWordLength || !checkForWord (word)) {
+						variables.isWord = false;
+				} else {
+						variables.isWord = true;
+				}
+				//triggers the check to met tastes if the word on the stove is a new and valid 
+				if (variables.isWord && lastWordChecked != word) {
+						variables.timeToCheckForTastes = true;
+						//sets the initial values for all highlighting options to false before they are checked
+						for (int i = 0; i < variables.timeToHighlightTaste.Length; i++) {
+								variables.timeToHighlightTaste [i] = false;
+						}
+						variables.timeToCheckForTastes = true;
+				} 
+				lastWordChecked = word;
+				//Calls MoveToFromStoveArray, which in turn calls three functions related to making sure any letters clicked either go to the stove,
+				//are removed from stove (if they are clicked off the stove)
+				moveToAndFromStove ();
 
-		//Calls MoveToFromStoveArray, which in turn calls three functions related to making sure any letters clicked either go to the stove,
-		//are removed from stove (if they are clicked off the stove)
-		moveToAndFromStove();
+				//if there are fewer than boardSize letters (basically if a word has been sent to a character) refills the letter banks
+				//to the adequate size
+				if (myLetters.Length < variables.boardSize) {
+						//Debug.Log ("Replacing letters because " + myLetters.Length + " is less than " + variables.boardSize);
+						replaceBankLetters ();
+				}
 
-		//if there are fewer than boardSize letters (basically if a word has been sent to a character) refills the letter banks
-		//to the adequate size
-		replaceBankLetters();
-
-		//ends the game if the player has run out of letters
-		//changed - used to be emptyLetterCount >= 5
-		if ((variables.totalLetters == 0) && (countToEndGame >= 7)) {
-			gameController.GetComponent<wordBuildingController>().sendVariablestoScoreScreen();
-			Application.LoadLevel ("ScoreScreen");
-		}
-		TurnOnOffSteam();
-		  countToEndGame = CountEmptyLetters(myLetters);
+				//ends the game if the player has run out of letters
+				//changed - used to be emptyLetterCount >= 5
+				//if ((variables.totalLetters == 0) && (countToEndGame >= 7))
+				//{
+				//    gameController.GetComponent<wordBuildingController>().sendVariablestoScoreScreen();
+				//    Application.LoadLevel("ScoreScreen");
+				//}
+				if (variables.iPhoneType != 1) {			
+						TurnOnOffSteam ();
+				}
+				countToEndGame = CountEmptyLetters (myLetters);
+				//updatePlaceholders();
 		  
-	}
+		}
 
-
-	 IEnumerator animateLetters (letterBehaviour letterToMove, Vector3 currentSpot, Vector3 moveToHere){
-
-		letterToMove.isMoving = true;
-//		int numSteps = 10;
-//		Vector3 stepIncrement = (moveToHere-currentSpot)/numSteps;
-//		for (int i = 0; i< numSteps; i++){
-//			letterToMove.transform.position += stepIncrement;
-//			yield return null;
+		//KEEP THIS FUNCTION - it is in progress!!
+//		void updatePlaceholders(){
+//			if(!lastHand && emptyLetterCount > 0){
+//				for(int i = 0; i<boardSize; i++){
+//				//-51 is the value that letterAlphabet order will have if it is a placeholder
+//					if(lettersOnBoard[i].letterAlphabetOrder == -51){
+//						lettersOnBoard[i].used = true;
+//						Destroy (lettersOnBoard[i].gameObject);
+//						lettersOnBoard[i] = null;
+//					}
+//				}
+//				emptyLetterCount = 0;
+//				myLetters = lettersInHand ();
+//				//replaceBankLetters();
+//				lastHand = true;
+//			}
+//
 //		}
 
-//		for( float i = 0f; i < 1; i += .15f){
-//			letterToMove.transform.position = Vector3.Slerp(currentSpot, moveToHere, i);
-//			yield return null;
-//		}
-		Vector3 velocity = new Vector3(0,0,0);
-		int dontCrash = 0;
-		//for( float i = 0f; i < 1; i += .15f){
-        if (letterToMove == null)
-            Debug.Log("LetterToMove is null and shouldn't be!! Error!");
-		while(letterToMove.transform.position != moveToHere && dontCrash < 100){
-			dontCrash++;
-			letterToMove.transform.position = Vector3.SmoothDamp(letterToMove.transform.position, moveToHere, ref velocity, .05f);
-			yield return null;	
-		}
-		//}
-		letterToMove.isMoving = false;
+        // Coroutine used to lerp letters towards a destination on screen.
+		IEnumerator animateLetters (letterBehaviour letterToMove, Vector3 currentSpot, Vector3 moveToHere, int index, string setUsed)
+		{   
+            letterToMove.isMoving = true;
 
-	 }
-	
-	 
-
-	void CreateSteam (){
-		stoveSteam = new GameObject[boardSize];
-		stoveHeat = new GameObject[boardSize];
-
-		for( int x = 0; x < boardSize; x++){
-			stoveSteam[x] = Instantiate (steamPrefab,stoveSpots[x] + new Vector3(0,-.5f,-.5f),new Quaternion (0,0,0,0)) as GameObject;
-			stoveSteam[x].transform.eulerAngles = new Vector3 (-90,0,0);
-
-			stoveHeat[x] = Instantiate (heatPrefab, stoveSpots[x] + new Vector3(0,-.5f,-.5f),new Quaternion (0,0,0,0)) as GameObject;
-			//stoveHeat[x].transform.eulerAngles = new Vector3 (-90,0,0);
-			stoveHeat[x].transform.Translate(new Vector3(0.0f, 0.5f, 0.0f));
-		}
-	}
-
-	void TurnOnOffSteam(){
-		for(int x = 0; x < boardSize; x++){
-			if(x < numLettersOnStove){
-				stoveSteam[x].particleSystem.emissionRate = 30;
-				stoveHeat[x].particleSystem.emissionRate = 10;
+			Vector3 velocity = new Vector3 (0, 0, 0);
+			int dontCrash = 0;
+				
+            // Move it towards 
+		    while (dontCrash < 100 && letterToMove.transform.position != moveToHere && !(setUsed == "stove" && lettersOnStove[index] == null)) {	
+					dontCrash++;
+					letterToMove.transform.position = Vector3.SmoothDamp (letterToMove.transform.position, moveToHere, ref velocity, .05f);
+					yield return null;	
 			}
-			else{
-				stoveSteam[x].particleSystem.emissionRate = 0;
-				stoveHeat[x].particleSystem.emissionRate = 0;
-			}
-		}
-	}
-
-
-	string returnLetters(int n)
-	{
-		//Random r = new Random();
-		//for the number of letters asked for, return a string with that many random letters in it
-		letters = randomLetter().ToString();
-		char randLetterChar;
-		for (int i = 1; i < n; i++)
-		{
-		  randLetterChar = randomLetter();
-		  letters += randLetterChar;
-		  if (randLetterChar == '.')
-			 emptyLetterCount++;
-		}
-		//resets the vowels added in cycle variable
-		vowelsAddedInCycle = 0;
-		return letters;
-	}
-
-	// Takes a random letter "out of the bag"
-	char randomLetter()
-	{	
-		//updates the variables for total letters and total vowels 
-		variables.totalLetters = variables.numA + variables.numB + variables.numC + variables.numD + variables.numE + variables.numF +
-			variables.numG + variables.numH + variables.numI + variables.numJ + variables.numK + variables.numL + variables.numM
-				+ variables.numN + variables.numO + variables.numP + variables.numQ + variables.numR + variables.numS + variables.numT
-				+ variables.numU + variables.numV + variables.numW + variables.numX + variables.numY + variables.numZ;
-		variables.totalVowels = variables.numA + variables.numE + variables.numI + variables.numO + variables.numU;
-	  
-		int currentPos = 0;
-		//if the letter should be from the pool of all letters
-
-		//Eva edited this.  Something was happening with variables.maxNumVowels and the min 
-		//I will further debug this later - however, hardcoding it like so works
-		//2 and 5 are the numbers in the game design document for min and max vowels.
-		if ((vowels >= 2 && vowels <= 5) || vowelsAddedInCycle >= 2 || firstHand ) { 
-			int letter = Random.Range(0, variables.totalLetters);
-			//Each letter decrements it's own number by one when selected and resets the total number of letters.
-			while (variables.totalLetters > 0)
-			{
-				if (letter < variables.numE)
-				{
-					variables.numE--;
-					vowelsAddedInCycle++;
-					return 'e';
-				}
-				currentPos += variables.numE;
-				if (letter < (currentPos + variables.numA))
-				{
-					variables.numA--;
-					vowelsAddedInCycle++;
-					return 'a';
-				}
-				currentPos += variables.numA;
-				if (letter < (currentPos + variables.numI))
-				{
-					variables.numI--;
-					vowelsAddedInCycle++;
-					return 'i';
-				}
-				currentPos += variables.numI;
-				if (letter < (currentPos + variables.numO))
-				{
-					variables.numO--;
-					vowelsAddedInCycle++;
-					return 'o';
-				}
-				currentPos += variables.numO;
-			  if (letter < (currentPos + variables.numN))
-			  {
-				 variables.numN--;
-				 return 'n';
-			  }
-			  currentPos += variables.numN;
-			  if (letter < (currentPos + variables.numR))
-			  {
-				 variables.numR--;
-				 return 'r';
-			  }
-			  currentPos += variables.numR;
-			  if (letter < (currentPos + variables.numT))
-			  {
-				 variables.numT--;
-				 return 't';
-			  }
-			  currentPos += variables.numT;
-			  if (letter < (currentPos + variables.numL))
-			  {
-				 variables.numL--;
-				 return 'l';
-			  }
-			  currentPos += variables.numL;
-			  if (letter < (currentPos + variables.numS))
-			  {
-				 variables.numS--;
-				 return 's';
-			  }
-			  currentPos += variables.numS;
-				if (letter < (currentPos + variables.numU))
-				{
-					variables.numU--;
-					vowelsAddedInCycle++;
-					return 'u';
-				}
-				currentPos += variables.numU;
-			  if (letter < (currentPos + variables.numD))
-			  {
-				 variables.numD--;
-					return 'd';
-			  }
-			  currentPos += variables.numD;
-			  if (letter < (currentPos + variables.numG))
-			  {
-				 variables.numG--;
-				 return 'g';
-			  }
-			  currentPos += variables.numG;
-			  if (letter < (currentPos + variables.numB))
-			  {
-				 variables.numB--;
-				 return 'b';
-			  }
-			  currentPos += variables.numB;
-			  if (letter < (currentPos + variables.numC))
-			  {
-				 variables.numC--;
-				 return 'c';
-			  }
-			  currentPos += variables.numC;
-			  if (letter < (currentPos + variables.numM))
-			  {
-				 variables.numM--;
-				 return 'm';
-			  }
-			  currentPos += variables.numM;
-			  if (letter < (currentPos + variables.numP))
-			  {
-				 variables.numP--;
-				 return 'p';
-			  }
-			  currentPos += variables.numP;
-			  if (letter < (currentPos + variables.numF))
-			  {
-				 variables.numF--;
-				 return 'f';
-			  }
-			  currentPos += variables.numF;
-			  if (letter < (currentPos + variables.numH))
-			  {
-				 variables.numH--;
-				 return 'h';
-			  }
-			  currentPos += variables.numH;
-			  if (letter < (currentPos + variables.numV))
-			  {
-				 variables.numV--;
-				 return 'v';
-			  }
-			  currentPos += variables.numV;
-			  if (letter < (currentPos + variables.numW))
-			  {
-				 variables.numW--;
-				 return 'w';
-			  }
-			  currentPos += variables.numW;
-			  if (letter < (currentPos + variables.numY))
-			  {
-				 variables.numY--;
-				 return 'y';
-			  }
-			  currentPos += variables.numY;
-			  if (letter < (currentPos + variables.numK))
-			  {
-				 variables.numK--;
-				 return 'k';
-			  }
-			  currentPos += variables.numK;
-			  if (letter < (currentPos + variables.numJ))
-			  {
-				 variables.numJ--;
-				 return 'j';
-			  }
-			  currentPos += variables.numJ;
-			  if (letter < (currentPos + variables.numX))
-			  {
-				 variables.numX--;
-				 return 'x';
-			  }
-			  currentPos += variables.numX;
-			  if (letter < (currentPos + variables.numQ))
-			  {
-				 variables.numQ--;
-				 return 'q';
-			  }
-			  currentPos += variables.numQ;
-			  if (letter < (currentPos + variables.numZ))
-			  {
-				 variables.numZ--;
-				 return 'z';
-			  }
-			}
-			  //Each letter decrements it's own number by one when selected and resets the total number of letters.
-			  while (variables.totalLetters > 0)
-			  {
-					if (letter < variables.numE)
-					{
-						 variables.numE--;
-					vowelsAddedInCycle++;
-						 return 'e';
-					}
-					currentPos += variables.numE;
-					if (letter < (currentPos + variables.numA))
-					{
-						 variables.numA--;
-					vowelsAddedInCycle++;
-						 return 'a';
-					}
-					currentPos += variables.numA;
-					if (letter < (currentPos + variables.numI))
-					{
-						 variables.numI--;
-					vowelsAddedInCycle++;
-						 return 'i';
-					}
-					currentPos += variables.numI;
-					if (letter < (currentPos + variables.numO))
-					{
-						 variables.numO--;
-					vowelsAddedInCycle++;
-						 return 'o';
-					}
-					currentPos += variables.numO;
-					if (letter < (currentPos + variables.numN))
-					{
-						 variables.numN--;
-						 return 'n';
-					}
-					currentPos += variables.numN;
-					if (letter < (currentPos + variables.numR))
-					{
-						 variables.numR--;
-						 return 'r';
-					}
-					currentPos += variables.numR;
-					if (letter < (currentPos + variables.numT))
-					{
-						 variables.numT--;
-						 return 't';
-					}
-					currentPos += variables.numT;
-					if (letter < (currentPos + variables.numL))
-					{
-						 variables.numL--;
-						 return 'l';
-					}
-					currentPos += variables.numL;
-					if (letter < (currentPos + variables.numS))
-					{
-						 variables.numS--;
-						 return 's';
-					}
-					currentPos += variables.numS;
-					if (letter < (currentPos + variables.numU))
-					{
-						 variables.numU--;
-						 return 'u';
-					}
-					currentPos += variables.numU;
-					if (letter < (currentPos + variables.numD))
-					{
-						 variables.numD--;
-					 return 'd';
-					}
-					currentPos += variables.numD;
-					if (letter < (currentPos + variables.numG))
-					{
-						 variables.numG--;
-						 return 'g';
-					}
-					currentPos += variables.numG;
-					if (letter < (currentPos + variables.numB))
-					{
-						 variables.numB--;
-						 return 'b';
-					}
-					currentPos += variables.numB;
-					if (letter < (currentPos + variables.numC))
-					{
-						 variables.numC--;
-						 return 'c';
-					}
-					currentPos += variables.numC;
-					if (letter < (currentPos + variables.numM))
-					{
-						 variables.numM--;
-						 return 'm';
-					}
-					currentPos += variables.numM;
-					if (letter < (currentPos + variables.numP))
-					{
-						 variables.numP--;
-						 return 'p';
-					}
-					currentPos += variables.numP;
-					if (letter < (currentPos + variables.numF))
-					{
-						 variables.numF--;
-						 return 'f';
-					}
-					currentPos += variables.numF;
-					if (letter < (currentPos + variables.numH))
-					{
-						 variables.numH--;
-						 return 'h';
-					}
-					currentPos += variables.numH;
-					if (letter < (currentPos + variables.numV))
-					{
-						 variables.numV--;
-						 return 'v';
-					}
-					currentPos += variables.numV;
-					if (letter < (currentPos + variables.numW))
-					{
-						 variables.numW--;
-						 return 'w';
-					}
-					currentPos += variables.numW;
-					if (letter < (currentPos + variables.numY))
-					{
-						 variables.numY--;
-						 return 'y';
-					}
-					currentPos += variables.numY;
-					if (letter < (currentPos + variables.numK))
-					{
-						 variables.numK--;
-						 return 'k';
-					}
-					currentPos += variables.numK;
-					if (letter < (currentPos + variables.numJ))
-					{
-						 variables.numJ--;
-						 return 'j';
-					}
-					currentPos += variables.numJ;
-					if (letter < (currentPos + variables.numX))
-					{
-						 variables.numX--;
-						 return 'x';
-					}
-					currentPos += variables.numX;
-					if (letter < (currentPos + variables.numQ))
-					{
-						 variables.numQ--;
-						 return 'q';
-					}
-					currentPos += variables.numQ;
-					if (letter < (currentPos + variables.numZ))
-					{
-						 variables.numZ--;
-						 return 'z';
-					}
-			  }
-		} 
-		//if the function should only return a vowel 
-		//Isaiah, I removed your line of code here && vowelsAddedInCycle < variables.minNumVowels 
-		//it didn't make sense to me that you would always be checking if the vowels added are less than the 
-		//min number of vowels.  This means you would constantly be added vowels even when they aren't needed. 
-		//Works a little better - but not great yet. 
-		else if (vowels < variables.minNumVowels && variables.totalVowels != 0) {
-			vowelsAddedInCycle++;
-			int letter = Random.Range(0, variables.totalVowels);
-			while (variables.totalLetters > 0)
-			{
-				if (letter < variables.numE)
-				{
-					variables.numE--;
-					vowelsAddedInCycle++;
-					return 'e';
-				}
-				currentPos += variables.numE;
-				if (letter < (currentPos + variables.numA))
-				{
-					variables.numA--;
-					vowelsAddedInCycle++;
-					return 'a';
-				}
-				currentPos += variables.numA;
-				if (letter < (currentPos + variables.numI))
-				{
-					variables.numI--;
-					vowelsAddedInCycle++;
-					return 'i';
-				}
-				currentPos += variables.numI;
-				if (letter < (currentPos + variables.numO))
-				{
-					variables.numO--;
-					vowelsAddedInCycle++;
-					return 'o';
-				}
-				currentPos += variables.numO;
-				if (letter < (currentPos + variables.numU))
-				{
-					variables.numU--;
-					vowelsAddedInCycle++;
-					return 'u';
-				}
-			}
-		}
-		//if the function should only return a consonant 
-		else if (vowels > variables.maxNumVowels || variables.totalVowels == 0) {
-			int letter = Random.Range(0, variables.totalLetters- variables.totalVowels);
-			while (variables.totalLetters > 0)
-			{
-				if (letter < (currentPos + variables.numN))
-				{
-					variables.numN--;
-					return 'n';
-				}
-				currentPos += variables.numN;
-				if (letter < (currentPos + variables.numR))
-				{
-					variables.numR--;
-					return 'r';
-				}
-				currentPos += variables.numR;
-				if (letter < (currentPos + variables.numT))
-				{
-					variables.numT--;
-					return 't';
-				}
-				currentPos += variables.numT;
-				if (letter < (currentPos + variables.numL))
-				{
-					variables.numL--;
-					return 'l';
-				}
-				currentPos += variables.numL;
-				if (letter < (currentPos + variables.numS))
-				{
-					variables.numS--;
-					return 's';
-				}
-				currentPos += variables.numS;
-				if (letter < (currentPos + variables.numD))
-				{
-					variables.numD--;
-					return 'd';
-				}
-				currentPos += variables.numD;
-				if (letter < (currentPos + variables.numG))
-				{
-					variables.numG--;
-					return 'g';
-				}
-				currentPos += variables.numG;
-				if (letter < (currentPos + variables.numB))
-				{
-					variables.numB--;
-					return 'b';
-				}
-				currentPos += variables.numB;
-				if (letter < (currentPos + variables.numC))
-				{
-					variables.numC--;
-					return 'c';
-				}
-				currentPos += variables.numC;
-				if (letter < (currentPos + variables.numM))
-				{
-					variables.numM--;
-					return 'm';
-				}
-				currentPos += variables.numM;
-				if (letter < (currentPos + variables.numP))
-				{
-					variables.numP--;
-					return 'p';
-				}
-				currentPos += variables.numP;
-				if (letter < (currentPos + variables.numF))
-				{
-					variables.numF--;
-					return 'f';
-				}
-				currentPos += variables.numF;
-				if (letter < (currentPos + variables.numH))
-				{
-					variables.numH--;
-					return 'h';
-				}
-				currentPos += variables.numH;
-				if (letter < (currentPos + variables.numV))
-				{
-					variables.numV--;
-					return 'v';
-				}
-				currentPos += variables.numV;
-				if (letter < (currentPos + variables.numW))
-				{
-					variables.numW--;
-					return 'w';
-				}
-				currentPos += variables.numW;
-				if (letter < (currentPos + variables.numY))
-				{
-					variables.numY--;
-					return 'y';
-				}
-				currentPos += variables.numY;
-				if (letter < (currentPos + variables.numK))
-				{
-					variables.numK--;
-					return 'k';
-				}
-				currentPos += variables.numK;
-				if (letter < (currentPos + variables.numJ))
-				{
-					variables.numJ--;
-					return 'j';
-				}
-				currentPos += variables.numJ;
-				if (letter < (currentPos + variables.numX))
-				{
-					variables.numX--;
-					return 'x';
-				}
-				currentPos += variables.numX;
-				if (letter < (currentPos + variables.numQ))
-				{
-					variables.numQ--;
-					return 'q';
-				}
-				currentPos += variables.numQ;
-				if (letter < (currentPos + variables.numZ))
-				{
-					variables.numZ--;
-					return 'z';
-				}
-			}
-		}
-		return',';
-	}
-
-
-	void CreateLetters(string l)
-	{
-		if(!gamePaused){
-			//take the string of letters to turn into on screen objects, and chop it into an array of its characters
-			char[] letterArray = l.ToCharArray();
-			print(l.ToString());
-			//run all the characters through a loop, find them, and then at the end of each loop iteration, instantiate the found letter in the array lettersOnBoard
-
-			for (int i = 0; i < l.Length; i++)
-			{
-			  //			//print(letterArray[i]);
-
-			  lettersOnBoard[boardSize - i - 1] = Instantiate(letterObj, bankSpots[boardSize - i - 1] - new Vector3 (0,10,0), new Quaternion(0, 0, 0, 0)) as letterBehaviour;
-			  lettersOnBoard[boardSize - i - 1].letter = letterArray[i].ToString();
-			}
-		}
-
-	}
-
-
-
-
-	void replaceBankLetters()
-	{
-
-		//makes sure the array containing the letters on board is filled from the front until there are no more letters
-		//so there are no spaces in the array between letters. Only has any effect if a word was sent out recently and there
-		//are now fewer letters on board than boardSize.
-
-		for (int i = (boardSize - 1); i > 0; i--)
-		{
-		  if (lettersOnBoard[i] != null && lettersOnBoard[i - 1] == null)
-		  {
-			 lettersOnBoard[i - 1] = lettersOnBoard[i];
-			 lettersOnBoard[i] = null;
-		  }
-		}
-
-		//if a letter was sent out recently and it has been one second since then,
-		//this block of code replaces all missing letters on board with random ones
-		// and effectively fills the bank.
-
-		if (timer > .25f && needsUpkeep)
-		{
-		  //print ("time to replace");
-		  int needsReplacing = 0;
-		  for (int i = 0; i < boardSize; i++)
-		  {
-			 if (lettersOnBoard[i] == null)
-			 {
-				needsReplacing++;
-			 }
-
-				positionOnBoard[i] = -1;
-		  }
-		  if (needsReplacing > 0)
-		  {
-			 string newLetters = returnLetters(needsReplacing);
-			 //print (newLetters);
-			 CreateLetters(newLetters);
-			 
-		  }
-
-		  needsUpkeep = false;
-		}
-	}
-
-	
-	void moveToAndFromStove()
-	{
-
-		//runs a loop through every letter on board
-		for (int i = 0; i < lettersOnBoard.Length; i++)
-		{
-
-		  //checks if any letters on the board should be moved to the stove and adds them to the stove array if so
-		  if (lettersOnBoard[i] != null)
-		  {
-			 if (!lettersOnBoard[i].onStove && lettersOnBoard[i].selected)
-			 {
-				lettersOnStove[numLettersOnStove] = lettersOnBoard[i];
-					positionOnBoard[numLettersOnStove] = i;
-				lettersOnBoard[i].onStove = true;
-				lettersOnBoard[i].orderOnStove = numLettersOnStove;
-				numLettersOnStove++;
-			 }
-
-			 //checks if any of the letters on the board should be removed from the stove, and if so removes them from the stove array
-			 if (lettersOnBoard[i].onStove && !lettersOnBoard[i].selected)
-			 {
-
-				//the following actions go through and get rid of every letter on the stove to the right of the selected one for removal, by for looping through all the letters on the stove
-				numLettersOnStove = lettersOnBoard[i].orderOnStove;
-				for (int x = lettersOnBoard[i].orderOnStove; x < boardSize; x++)
-				{
-					if (lettersOnStove[x] != null)
-					{
-
-						lettersOnStove[x].orderOnStove = -1;
-						lettersOnStove[x].selected = false;
-						lettersOnStove[x].onStove = false;
-						lettersOnStove[x] = null;
-							positionOnBoard[x] = -1;
-					}
-				}
-			 }
-			 //checks all letters on stove, and puts them in the correct position
-				if (lettersOnStove[i] != null && lettersOnStove[i].transform.position != stoveSpots[i])
-				{
-					//lettersOnStove[i].transform.position = stoveSpots[i];
-					if(!lettersOnStove[i].isMoving){
-					 	StartCoroutine(animateLetters(lettersOnStove[i],lettersOnStove[i].transform.position, stoveSpots[i]));
-					}
-				}
-				//checks all letters that are on the board but not the stove, and puts them in the correct position
-				if (!lettersOnBoard[i].onStove && lettersOnBoard[i].transform.position != bankSpots[i])
-				{
-					//lettersOnBoard[i].transform.position = bankSpots[i];
-					if(!lettersOnBoard[i].isMoving){
-						StartCoroutine(animateLetters(lettersOnBoard[i],lettersOnBoard[i].transform.position, bankSpots[i]));
-					}
-				}
-			}
-		}
-		needsReordering = false;
-
-	}
-
-	//	void ReorderStoveArrays(){
-	//		//this function pushes all members of the stove array to the front of it
-	//		//runs a reverse for loop to count down and move any letters whos next lower element is empty
-	//		for (int i = (boardSize-1); i> 0; i--){
-	//			if(lettersOnStove[i] != null && lettersOnStove[i-1] ==null){
-	//				lettersOnStove[i-1] = lettersOnStove[i];
-	//				lettersOnStove[i] = null;
-	//				lettersOnStove[i-1].orderOnStove = (i-1);
-	//
-	//			}
-	//		}
-	//	}
-
-	//	void PlaceAllLetters(){
-	//
-	//		for(int i = 0; i < boardSize; i++){
-	//			if(lettersOnStove[i] != null){
-	//				lettersOnStove[i].transform.position = stoveSpots[i];
-	//			}
-	//
-	//			if(lettersOnBoard[i] != null && !lettersOnBoard[i].onStove){
-	//				lettersOnBoard[i].transform.position = bankSpots[i];
-	//			}
-	//		}
-	//	}
-
-
-	public void ResetStove()
-	{
-
-		for (int i = 0; i < boardSize; i++)
-		{
-		  if (lettersOnStove[i] != null)
-		  {
-			 lettersOnStove[i].used = true;
-			 Destroy(lettersOnStove[i].gameObject);
-			 lettersOnStove[i] = null;
-		  }
-		}
-		numLettersOnStove = 0;
-		timer = 0;
-		needsUpkeep = true;
-	  
-		variables.letterGenerationSound = true;
-
-	}
-
-	//can be called to return whatever is on the stove as a string
-	public string sendWord()
-	{
-		//creates a local variable to be returned- whatever word is on stove
-		string currentWord = null;
-
-		//runs through all letters on stove, adds their char to the currentword in the order it is on the stove,
-		//and then destroys the letters (SHOULD BE CHANGED IF METHOD OF CHECKING/DISCARDING WORDS CHANGED)!!
-		for (int i = 0; i < boardSize; i++)
-		{
-		  if (lettersOnStove[i] != null)
-		  {
-			 currentWord += lettersOnStove[i].letter;
-		  }
-		}
-
-		//resets all variables related to whats on stove, resets local timer, and then returns the string of whats on stove
-		//		print("WORD SUBMITTED: " + currentWord.ToString());
-		return currentWord;
-
-	}
-
-	//shuffles the letters currently in your hand
-	void shuffleLetters()
-	{
-		variables.shuffleSound = true;
-		int nextSpotNum = -1;
-		//creates an array to temporarily store the new array locations for each letter
-		letterBehaviour[] nextLetters;
-		nextLetters = new letterBehaviour[boardSize];
-		//clears the boolean array that determines which spots are taken
-		clearSpots();
-		//finds a new spot for each letter in the array
-		for (int i = 0; i < boardSize; i++)
-		{
-			if (!spotIsOnBoard(i)) {
-			  //finds an untaken spot for that letter
-			  while (nextSpotNum == -1)
-			  {
-				 nextSpotNum = findNewSpot();
-			  }
-			  //stores the letter in the temp array
-			  nextLetters[nextSpotNum] = lettersOnBoard[i];
-			  newArraySpot[nextSpotNum] = true;
-			  nextSpotNum = -1;
-			}
-		}
-		//sets the letter array to the temp array and changes positions
-		for (int i = 0; i < boardSize; i++)
-		{
-			if (!spotIsOnBoard(i)) {
-			  lettersOnBoard[i] = nextLetters[i];
-			  //I commented out the following line because it is taken care of in moveToFromStove() 
-				//in general letter placement upkeep
-				//lettersOnBoard[i].transform.position = bankSpots[i];
-
-			}
-		}
-	}
-
-
-	//clears the spots in the bool array for new letter spots
-	void clearSpots()
-	{
-		for (int i = 0; i < boardSize; i++)
-		{
-		  newArraySpot[i] = false;
-		}
-	}
-
-	//returns a random int if that spot in the array is untaken
-	int findNewSpot()
-	{
-		int nextSpotNum = 0;
-		nextSpotNum = (int)Random.Range(0, boardSize);
-		if (newArraySpot[nextSpotNum] == false && !spotIsOnBoard(nextSpotNum))
-		{
-		  return nextSpotNum;
-		}
-		else
-		{
-		  return -1;
-		}
-	}
-
-	bool spotIsOnBoard(int spotNum) {
-		bool onBoard = false;
-		for (int i = 0; i < boardSize; i++) {
-			if (positionOnBoard[i] == spotNum) {
-				onBoard = true;
-			}
-		}
-		return onBoard;
-	}
-	//current test for sending words from stove
-	void OnGUI()
-	{
-		//if (GUI.Button(new Rect(430, 370, 100, 30), "Send Word")){
-		//	sendWord();
-		//} else 
-		if(!gamePaused ){
-			GUIStyle style = new GUIStyle ();
-			style.normal.background = shuffleButton;
-
-			if (GUI.Button(new Rect(Screen.width*0.013f, Screen.height*0.43f, Screen.width*0.07f, Screen.width*0.07f), "", style))
-			{ //shuffles the letters in your hand
-			  shuffleLetters();
-			}
-		}
-	}
-
-	void makeWordListAndScoreDict()
-	{
-		if (letterScores == null)
-		{
-			letterScores = new Dictionary<char, int>();
 			
-			//Create the dictionary of letter scores
-			foreach (char letter in "eaionrtlsu")
-			{
-				letterScores.Add(letter, 1);
-			}
-			foreach (char letter in "dg")
-			{
-				letterScores.Add(letter, 2);
-			}
-			foreach (char letter in "bcmp")
-			{
-				letterScores.Add(letter, 3);
-			}
-			foreach (char letter in "fhvwy")
-			{
-				letterScores.Add(letter, 4);
-			}
-			letterScores.Add('k', 5);
-			foreach (char letter in "jx")
-			{
-				letterScores.Add(letter, 8);
-			}
-			foreach (char letter in "qz")
-			{
-				letterScores.Add(letter, 10);
-			}
-			letterScores.Add('.', 0);
-
+			letterToMove.isMoving = false;
+		    if(setUsed == "stove" && lettersOnStove[index] == null)
+			    print ("woulda been an error without this same check in the while statement");
 		}
 
-		//This method makes the word list once
-		string[] tempWordList = sowpods.text.Split('\n');
-		for (int j = 0; j < tempWordList.Length; j++)
+        // Creates a steam prefabs for every tile on the stove 
+		void CreateSteam ()
 		{
-		  string proposedWord = tempWordList[j].Trim();
-		  if ((proposedWord.Length >= variables.minWordLength) && (proposedWord.Length <= variables.maxWordLength))
-		  {
-			 wordList.Add(proposedWord);
-		  }
-		}
-	}
+				stoveSteam = new GameObject[boardSize];
+				stoveHeat = new GameObject[boardSize];
+				for (int x = 0; x < boardSize; x++) {
+						stoveSteam [x] = Instantiate (steamPrefab, stoveSpots [x] + new Vector3 (0, -.5f, -.5f), new Quaternion (0, 0, 0, 0)) as GameObject;
+						stoveSteam [x].transform.eulerAngles = new Vector3 (-90, 0, 0);
 
-	public bool checkForWord(string word)
-	{
-		//This method will, when passed a word, check if it's a valid word
-		//Our word list happens to contain uppercase only words, so convert before checking
-		//Debug.Log ("Checking a word in checkForWord!");
-		return (wordList.Contains(word.ToUpper()));
-	}
-	//counts the current number of vowels
-	public int countVowels (){
-		int vowelCount = 0;
-		if (myLetters.Length == 8) {
-			char[] vowels = new char[] {'a', 'e', 'i', 'o', 'u'};
-			for (int i = 0; i < boardSize; i++) {
-				for (int j = 0; j < 5; j++) {
-					if (myLetters[i] == vowels[j]) {
-						vowelCount++;
-					}
+						stoveHeat [x] = Instantiate (heatPrefab, stoveSpots [x] + new Vector3 (0, -.5f, -.5f), new Quaternion (0, 0, 0, 0)) as GameObject;
+						//stoveHeat[x].transform.eulerAngles = new Vector3 (-90,0,0);
+						stoveHeat [x].transform.Translate (new Vector3 (0.0f, 0.5f, 0.0f));
 				}
-			}
 		}
-		return vowelCount;
-	}
-	//stores a stringo of the current letters 
-	public string lettersInHand () {
-		string letters = "";
-		for (int i = 0; i < boardSize; i++) {
-			if (lettersOnBoard[i]!= null) {
-				letters += lettersOnBoard[i].letter;
-			}
-		}
-		return letters;
-	}
-	 int CountEmptyLetters(string myLetters)
-	 {
-		  int count = 0;
-		  foreach (char element in myLetters.ToCharArray())
-		  {
-				if ((element == ',') || (element == '.'))
-				{
-					 count++;
+
+        // Toggles whether steam particles are created or not.
+		void TurnOnOffSteam ()
+		{
+				for (int x = 0; x < boardSize; x++) {
+						if (x < numLettersOnStove && variables.isWord) {
+								stoveSteam [x].particleSystem.emissionRate = 30;
+								stoveHeat [x].particleSystem.emissionRate = 10;
+						} else {
+								stoveSteam [x].particleSystem.emissionRate = 0;
+								stoveHeat [x].particleSystem.emissionRate = 0;
+						}
 				}
-		  }
-		  return count;
-	 }
+		}
+        
+        // Returns a random string of letters of length n
+		string returnLetters (int n)
+		{
+				//Random r = new Random();
+				//for the number of letters asked for, return a string with that many random letters in it.
+				//First empty the letters variable of its old contents.
+				letters = null;
+				char randLetterChar;
+				for (int i = 1; i <= n; i++) {
+						randLetterChar = randomLetter (); //Get a random letter
+						//update the hand immediately so we can count vowels correctly - this asks in batches so if we don't do this,
+						//we don't know how many vowels we will have on the board when returnLetters returns and therefore cannot
+						//correctly assess if we need more vowels or not (or specifically need consonants!)
+						myLetters += randLetterChar;
+						letters += randLetterChar;
+						if (randLetterChar == '.') {
+								emptyLetterCount++;
+						}
+				}
+				return letters;
+		}
+	
+		//takes a random letter out of the bag
+		char randomLetter ()
+		{    
+				//I was getting two of the same letter in a row a LOT. I hope this will fix that.
+				Random.seed = System.Environment.TickCount; 
+                
+                if (variables.totalLetters <= 0 && variables.timedMode)
+                {
+                    refillLetterBag();
+                }
+                
+				//Make a big long list of all the letters in the letter bag, for easy picking
+				//Let's also make bags of just the vowels and consonants at the same time, for even easier picking
+				//These bags aren't the real things - they're copies just for the purposes of choosing a random letter,
+				//recreated from the real thing each time we ask for a random letter
+				//We will decrement the real thing when we choose one
+				List<char> serializedLetterBag = new List<char> ();
+				List<char> vowelsInLetterBag = new List<char> ();
+				List<char> consonantsInLetterBag = new List<char> ();
+
+				foreach (KeyValuePair<char, int> entry in variables.letterBag) { //loop through our letterBag Dictionary
+						for (int i = 1; i <= entry.Value; i++) { //Add that many letters to our serialized version (it could well be 0 - that's fine)
+								serializedLetterBag.Add (entry.Key);
+								if (vowelList.Contains (entry.Key)) { //If it's a vowel, add it to the vowel bag
+										vowelsInLetterBag.Add (entry.Key);
+								}
+								if (consonantList.Contains (entry.Key)) { //If it's a consonant, add it to the consonant bag
+										consonantsInLetterBag.Add (entry.Key);
+								}
+						}
+				}
+				
+				//First check if there are any letters in the bag. 
+				//If we don't have any, then check if we're in timed mode.
+				//If not, return a ".", which says to returnLetters that we're empty - 
+				//we've got none letters. Too bad.
+				
+				if (serializedLetterBag.Count () == 0) {
+						if (!variables.timedMode) {
+								return '.';
+						} else {
+								Debug.Log ("We've got 0 letters and we're in timed mode. This should NEVER happen. BUG.");
+						}
+				}
+				//update the number of vowels in hand
+				numVowels = countVowels (); //count the number of vowels that are on the board so that we know what to do later in this function
+                //We need a vowel.
+                if (numVowels < variables.minNumVowels)
+                { 
+                    //replace the highest-scoring consonant with an a or an e
+                    if (vowelsInLetterBag.Count <= 0)
+                    {
+                        char letterToReplace = serializedLetterBag[0];
+                        for (int i = 1; i < serializedLetterBag.Count; i++)
+                        {
+                            if (letterScores[serializedLetterBag[i]] > letterScores[letterToReplace])
+                            {
+                                letterToReplace = serializedLetterBag[i];
+                            }
+                        }
+
+                        variables.letterBag[letterToReplace] = variables.letterBag[letterToReplace] - 1; //Remove the replaced letter from the bag
+
+                        //Creates an additional "A" or "E" if there are no vowels left
+                        //We don't do this in timed mode - your bag will get refilled
+                        float aOrE = Random.Range(0.0f, 1.0f);
+
+                        if (aOrE < 0.5f)
+                        {
+                            variables.totalLetters--;
+                            return 'a';
+
+                        }
+                        if (aOrE >= 0.5f)
+                        {
+                            variables.totalLetters--;
+                            return 'e';
+                        }
+                        //Say there aren't any vowels left - so we're giving a consonant
+                        Debug.Log("Replacing the highest scoring consonant with a vowel");
+                    }
+                    else
+                    {
+                        //We now have a vowel and can return it.
+                        Debug.Log("Logic says we MUST return a vowel and we've got one to give");
+                        char vowelToReturn = vowelsInLetterBag[Random.Range(0, vowelsInLetterBag.Count())]; //pick a random vowel
+                        variables.totalVowels--; //decrement total number of Vowels
+                        variables.totalLetters--; //decrement total number of letters
+                        variables.letterBag[vowelToReturn] = variables.letterBag[vowelToReturn] - 1; //decrement the number of that letter in the global letterBag
+                        //Debug.Log ("Returning " + vowelToReturn);
+                        return vowelToReturn; //return that vowel
+                    }
+                }						
+				if (numVowels >= variables.maxNumVowels && consonantsInLetterBag.Count () > 0) { //If we already have enough vowels (or too many, but we screwed up if that happens), return a consonant
+						//Debug.Log ("Logic says we MUST return a consonant");
+						char consonantToReturn = consonantsInLetterBag [Random.Range (0, consonantsInLetterBag.Count ())]; //pick a random consonant
+						variables.letterBag [consonantToReturn] = variables.letterBag [consonantToReturn] - 1; //decrement the number of that letter in the global letterBag
+						variables.totalLetters--; //decrement total number of letters to display to player
+						//Debug.Log ("Returning " + consonantToReturn);
+						return consonantToReturn;
+				} else { //Else, we're free to return anything - we don't have the max number of vowels or too few vowels
+						//Debug.Log ("Logic says we can return anything we want.");
+						char letterToReturn = serializedLetterBag [Random.Range (0, serializedLetterBag.Count ())];
+						variables.letterBag [letterToReturn] = variables.letterBag [letterToReturn] - 1; //decrement the number of that letter in the global letterBag
+						if (vowelList.Contains (letterToReturn)) {
+								variables.totalVowels--; //if it's a vowel, decrement global vowel number
+						}
+						variables.totalLetters--; //decrement total number of tiles in bag to display to player
+						//Debug.Log ("Returning " + letterToReturn);
+						return letterToReturn;
+				}
+		}
+
+		void CreateLetters (string l)
+		{
+				if (!gamePaused) {
+						//take the string of letters to turn into on screen objects, and chop it into an array of its characters
+						char[] letterArray = l.ToCharArray ();
+						print (l.ToString ());
+						
+						//run all the characters through a loop, find them, and then at the end of each loop iteration, instantiate the found letter in the array lettersOnBoard
+
+						for (int i = 0; i < l.Length; i++) {
+								//			//print(letterArray[i]);
+
+								lettersOnBoard [boardSize - i - 1] = Instantiate (letterObj, bankSpots [boardSize - i - 1] - new Vector3 (0, 10, 0), new Quaternion (0, 0, 0, 0)) as letterBehaviour;
+								lettersOnBoard [boardSize - i - 1].letter = letterArray [i].ToString ();
+						}
+				}
+				//Debug.Log ("Put new letters on board: " + l.ToString () + " and now I have " + lettersInHand ());
+		}
+	
+		void replaceBankLetters ()
+		{
+
+				//makes sure the array containing the letters on board is filled from the front until there are no more letters
+				//so there are no spaces in the array between letters. Only has any effect if a word was sent out recently and there
+				//are now fewer letters on board than boardSize.
+				//This code is intended to move everything to the left in the array, so that all the blank spaces are on the right.
+				letterBehaviour [] temp = new letterBehaviour[boardSize];
+				int counter = 0;
+				for (int i = 0; i < boardSize; i++) {
+						if (lettersOnBoard [i] != null) {
+								temp [counter] = lettersOnBoard [i];
+								counter++;
+						}
+
+				}
+				lettersOnBoard = temp;
+				/*
+				 * for (int i = (boardSize - 1); i > 0; i--) {
+						if (lettersOnBoard [i] != null && lettersOnBoard [i - 1] == null) {
+								lettersOnBoard [i - 1] = lettersOnBoard [i];
+								lettersOnBoard [i] = null;
+						}
+				}
+				*/
+				//print out lettersOnBoard for debugging purposes
+				//Debug.Log ("Now lettersOnBoard is " + lettersOnBoard.ToString () + " before replacing");
+
+				//if a letter was sent out recently and it has been one second since then,
+				//this block of code replaces all missing letters on board with random ones
+				// and effectively fills the bank.
+
+			
+				int needsReplacing = 0;
+				for (int i = 0; i < boardSize; i++) {
+						if (lettersOnBoard [i] == null) {
+								needsReplacing++;
+						}
+
+						positionOnBoard [i] = -1;
+				}
+				if (needsReplacing > 0) {
+						string newLetters = returnLetters (needsReplacing);
+						//Debug.Log ("Got new letters from returnLetters: " + newLetters);
+						//print (newLetters);
+						CreateLetters (newLetters);
+			 
+				}
+				
+				if (!variables.timedMode) {
+						stopSearch = false;
+						if (variables.lettersRemaining <= boardSize - 2 && !stopSearch && !noWordsLeft) {
+								CheckPermutations (myLetters);
+						}
+						if (noWordsLeft) {
+								variables.endGame = true;
+						}
+				}
+		}
+	
+		void moveToAndFromStove ()
+		{
+
+				//runs a loop through every letter on board
+				for (int i = 0; i < lettersOnBoard.Length; i++) {
+
+						//checks if any letters on the board should be moved to the stove and adds them to the stove array if so
+						if (lettersOnBoard [i] != null) {
+								// all letters on the board should be white always
+								lettersOnBoard [i].gameObject.renderer.material.color = Color.white;
+
+								if (!lettersOnBoard [i].onStove && lettersOnBoard [i].selected) {
+										lettersOnStove [numLettersOnStove] = lettersOnBoard [i];
+										positionOnBoard [numLettersOnStove] = i;
+										lettersOnBoard [i].onStove = true;
+										lettersOnBoard [i].orderOnStove = numLettersOnStove;
+										numLettersOnStove++;
+								}
+
+								// check for a valid word, and if there is one, color the letters gold-like
+								if (variables.isWord) {
+										if (variables.isWord) {
+												for (int x = 0; x < lettersOnStove.Length; x++) {
+														if (lettersOnStove [x] != null) {
+																lettersOnStove [x].gameObject.renderer.material.color = new Color (0.8f, 0.8f, 0.2f);
+														}
+												}
+										} else {
+												for (int x = 0; x < lettersOnStove.Length; x++) {
+														if (lettersOnStove [x] != null) {
+																lettersOnStove [x].gameObject.renderer.material.color = new Color (1.0f, 1.0f, 1.0f);
+														}
+												}
+										}									
+								}
+
+								//checks if any of the letters on the board should be removed from the stove, and if so removes them from the stove array
+								if (lettersOnBoard [i].onStove && !lettersOnBoard [i].selected) {
+
+										//the following actions go through and get rid of every letter on the stove to the right of the selected one for removal, by for looping through all the letters on the stove
+										numLettersOnStove = lettersOnBoard [i].orderOnStove;
+										for (int x = lettersOnBoard[i].orderOnStove; x < boardSize; x++) {
+												if (lettersOnStove [x] != null) {
+														lettersOnStove [x].orderOnStove = -1;
+														lettersOnStove [x].selected = false;
+														lettersOnStove [x].onStove = false;
+														lettersOnStove [x] = null;
+														positionOnBoard [x] = -1;
+												}
+										}
+								}
+								//checks all letters on stove, and puts them in the correct position
+								if (lettersOnStove [i] != null && lettersOnStove [i].transform.position != stoveSpots [i]) {
+										//lettersOnStove[i].transform.position = stoveSpots[i];
+										if (!lettersOnStove [i].isMoving) {
+												StartCoroutine (animateLetters (lettersOnStove [i], lettersOnStove [i].transform.position, stoveSpots [i], i, "stove"));												
+										}
+								}
+								//checks all letters that are on the board but not the stove, and puts them in the correct position
+								if (!lettersOnBoard [i].onStove && lettersOnBoard [i].transform.position != bankSpots [i]) {
+										//lettersOnBoard[i].transform.position = bankSpots[i];
+										if (!lettersOnBoard [i].isMoving) {
+												StartCoroutine (animateLetters (lettersOnBoard [i], lettersOnBoard [i].transform.position, bankSpots [i], i, "board"));
+										}
+								}
+						}
+				}
+				needsReordering = false;
+
+		}
+
+		public void ResetStove ()
+		{
+				//First, since we still have the non-null array of letters on the stove, go through and kill their lettersOnBoard equivalents
+				//It is unclear to me why this is necessary, since I thought that lettersOnStove contained a subset of the same objects
+				//that is in lettersOnBoard... if we wait a couple of Updates, they go away, so I think it's just Unity doing things non-atomically
+				//Still, this is worth it because doing this means that we don't have to update myLetters on every Update.
+				foreach (letterBehaviour stoveLetter in lettersOnStove) {
+						for (int j = 0; j < boardSize; j++) {
+								if (lettersOnBoard [j] != null && stoveLetter != null && stoveLetter == lettersOnBoard [j]) {
+										//Debug.Log ("Destroying " + lettersOnBoard [j].letter);
+										lettersOnBoard [j] = null;
+								}
+						}
+				}
+				//Now destroy the ones on the stove. Theoretically, this should have already been done above... but, see above.
+				for (int i = 0; i < boardSize; i++) {
+						if (lettersOnStove [i] != null) {
+								lettersOnStove [i].used = true;
+								Destroy (lettersOnStove [i].gameObject);
+								lettersOnStove [i] = null;
+						}
+				}
+				myLetters = lettersInHand ();
+				//Debug.Log ("myLetters is now " + myLetters);
+				numLettersOnStove = 0;
+				variables.letterGenerationSound = true;
+				//stopSearch = false;
+		}
+
+		//can be called to return whatever is on the stove as a string
+		public string sendWord ()
+		{
+				//creates a local variable to be returned- whatever word is on stove
+				string currentWord = null;
+
+				//runs through all letters on stove, adds their char to the currentword in the order it is on the stove,
+				//and then destroys the letters (SHOULD BE CHANGED IF METHOD OF CHECKING/DISCARDING WORDS CHANGED)!!
+				for (int i = 0; i < boardSize; i++) {
+						if (lettersOnStove [i] != null) {
+								currentWord += lettersOnStove [i].letter;
+						}
+				}
+
+				//resets all variables related to whats on stove, and then returns the string of whats on stove
+				//		print("WORD SUBMITTED: " + currentWord.ToString());
+				return currentWord;
+
+		}
+
+		//shuffles the letters currently in your hand
+		public void shuffleLetters ()
+		{
+				variables.shuffleSound = true;
+				int nextSpotNum = -1;
+				//creates an array to temporarily store the new array locations for each letter
+				letterBehaviour[] nextLetters;
+				nextLetters = new letterBehaviour[boardSize];
+				//clears the boolean array that determines which spots are taken
+				clearSpots ();
+				//finds a new spot for each letter in the array
+				for (int i = 0; i < boardSize; i++) {
+						if (!spotIsOnBoard (i)) {
+								//finds an untaken spot for that letter
+								while (nextSpotNum == -1) {
+										nextSpotNum = findNewSpot ();
+								}
+								//stores the letter in the temp array
+								nextLetters [nextSpotNum] = lettersOnBoard [i];
+								newArraySpot [nextSpotNum] = true;
+								nextSpotNum = -1;
+						}
+				}
+				//sets the letter array to the temp array and changes positions
+				for (int i = 0; i < boardSize; i++) {
+						if (!spotIsOnBoard (i)) {
+								lettersOnBoard [i] = nextLetters [i];
+								//I commented out the following line because it is taken care of in moveToFromStove() 
+								//in general letter placement upkeep
+								//lettersOnBoard[i].transform.position = bankSpots[i];
+
+						}
+				}
+		}
+
+
+		//clears the spots in the bool array for new letter spots
+		void clearSpots ()
+		{
+				for (int i = 0; i < boardSize; i++) {
+						newArraySpot [i] = false;
+				}
+		}
+
+		//returns a random int if that spot in the array is untaken
+		int findNewSpot ()
+		{
+				int nextSpotNum = 0;
+				nextSpotNum = (int)Random.Range (0, boardSize);
+				if (newArraySpot [nextSpotNum] == false && !spotIsOnBoard (nextSpotNum)) {
+						return nextSpotNum;
+				} else {
+						return -1;
+				}
+		}
+
+		bool spotIsOnBoard (int spotNum)
+		{
+				bool onBoard = false;
+				for (int i = 0; i < boardSize; i++) {
+						if (positionOnBoard [i] == spotNum) {
+								onBoard = true;
+						}
+				}
+				return onBoard;
+		}
+		//current test for sending words from stove
+//		void OnGUI ()
+//		{
+//				//if (GUI.Button(new Rect(430, 370, 100, 30), "Send Word")){
+//				//	sendWord();
+//				//} else 
+//				if (!gamePaused) {
+//						GUIStyle style = new GUIStyle ();
+//						style.normal.background = shuffleButton;
+//
+//						if (GUI.Button (new Rect (Screen.width * 0.075f, Screen.height * 0.625f, Screen.width * 0.1f, Screen.width * 0.07f), "", style)) { //shuffles the letters in your hand
+//								shuffleLetters ();
+//						}
+//				}
+//		}
+
+		void makeWordListAndScoreDict ()
+		{
+				if (letterScores == null) {
+						letterScores = new Dictionary<char, int> ();
+			
+						//Create the dictionary of letter scores
+						foreach (char letter in "eaionrtlsu") {
+								letterScores.Add (letter, 1);
+						}
+						foreach (char letter in "dg") {
+								letterScores.Add (letter, 2);
+						}
+						foreach (char letter in "bcmp") {
+								letterScores.Add (letter, 3);
+						}
+						foreach (char letter in "fhvwy") {
+								letterScores.Add (letter, 4);
+						}
+						letterScores.Add ('k', 5);
+						foreach (char letter in "jx") {
+								letterScores.Add (letter, 8);
+						}
+						foreach (char letter in "qz") {
+								letterScores.Add (letter, 10);
+						}
+						letterScores.Add ('.', 0);
+
+				}
+
+				//This method makes the word list once
+				string[] tempWordList = sowpods.text.Split ('\n');
+				for (int j = 0; j < tempWordList.Length; j++) {
+						string proposedWord = tempWordList [j].Trim ();
+						if ((proposedWord.Length >= variables.minWordLength) && (proposedWord.Length <= variables.maxWordLength)) {
+								wordList.Add (proposedWord);
+						}
+				}
+		}
+
+		public bool checkForWord (string word)
+		{
+				if (word != null) {
+						//This method will, when passed a word, check if it's a valid word
+						//Our word list happens to contain uppercase only words, so convert before checking
+						//Debug.Log ("Checking a word in checkForWord!");
+						return (wordList.Contains (word.ToUpper ()));
+				} else {
+						return false;
+				}
+		}
+
+		public int countVowels ()
+		{
+				int vowelCount = 0;
+				foreach (char letter in myLetters) {
+						if (vowelList.Contains (letter)) {
+								vowelCount++;
+						}
+				}
+				return vowelCount;
+		}
+		//	Returns a string of the current letters on the board
+		public string lettersInHand ()
+		{
+				string letters = "";
+				for (int i = 0; i < boardSize; i++) {
+						if (lettersOnBoard [i] != null) {
+								letters += lettersOnBoard [i].letter;
+						}
+				}
+				return letters;
+		}
+
+		int CountEmptyLetters (string myLetters)
+		{
+				int count = 0;
+				foreach (char element in myLetters.ToCharArray()) {
+						if ((element == ',') || (element == '.')) {
+								count++;
+						}
+				}
+				return count;
+		}
+
+		void CheckPermutations (string input)
+		{
+				input = input.Replace (",", "");
+				input = input.Replace (".", "");
+				if (input.Length > 6) {
+						stopSearch = true;
+						return;
+				}
+				combinationList.Clear ();
+				CreateCombinations ("", input);
+				for (int i = 2; i < input.Length+1; i++) {
+						foreach (string check in combinationList) {
+								if (check.Length == i && !stopSearch) {
+										bool[] usedChar = new bool[i];
+										char[] chars = new char[i];
+										chars = check.ToCharArray ();
+										//print (check);
+										CreateAndSubmitPermutations (chars, i, 0, usedChar, "");
+								}
+						}
+				}
+				if (!stopSearch) {
+						noWordsLeft = true;
+				}
+		}
+
+		void CreateAndSubmitPermutations (char[] check, int length, int level, bool[] usedChar, string output)
+		{
+				if (stopSearch) {
+						return;
+				}
+				if (level == length) {
+						//print (output);
+						if (checkForWord (output)) {
+								stopSearch = true;
+								print ("WORD FOUND: " + output); 
+						}
+						return;
+				}
+				for (int i = 0; i<length; i++) {
+						if (!usedChar [i]) {
+								output += check [i].ToString ();
+								usedChar [i] = true;
+								CreateAndSubmitPermutations (check, length, level + 1, usedChar, output);
+								usedChar [i] = false;
+								output = output.Remove (output.Length - 1);
+						}
+				}
+				//print (output);
+		
+		}
+
+		void CreateCombinations (string active, string rest)
+		{
+				//print (rest[0]);
+				if (active == null && rest == null) {
+						return;
+				}
+				if (rest == "") {
+						if (active.Length > 1 && active.Length < 5) {
+								combinationList.Add (active);
+								//print (active);
+						}
+						return;
+				} else {
+						//print(rest);
+						CreateCombinations (active + rest [0], rest.Substring (1));
+						CreateCombinations (active, rest.Substring (1));
+				}
+
+		}
+
+		void refillLetterBag ()
+		{
+				//this is for timed mode - it should be called when we are about to run out of letters
+				variables.letterBag ['a'] = variables.numA;
+				variables.letterBag ['b'] = variables.numB;
+				variables.letterBag ['c'] = variables.numC;
+				variables.letterBag ['d'] = variables.numD;
+				variables.letterBag ['e'] = variables.numE;
+				variables.letterBag ['f'] = variables.numF;
+				variables.letterBag ['g'] = variables.numG;
+				variables.letterBag ['h'] = variables.numH;
+				variables.letterBag ['i'] = variables.numI;
+				variables.letterBag ['j'] = variables.numJ;
+				variables.letterBag ['k'] = variables.numK;
+				variables.letterBag ['l'] = variables.numL;
+				variables.letterBag ['m'] = variables.numM;
+				variables.letterBag ['n'] = variables.numN;
+				variables.letterBag ['o'] = variables.numO;
+				variables.letterBag ['p'] = variables.numP;
+				variables.letterBag ['q'] = variables.numQ;
+				variables.letterBag ['r'] = variables.numR;
+				variables.letterBag ['s'] = variables.numS;
+				variables.letterBag ['t'] = variables.numT;
+				variables.letterBag ['u'] = variables.numU;
+				variables.letterBag ['v'] = variables.numV;
+				variables.letterBag ['w'] = variables.numW;
+				variables.letterBag ['x'] = variables.numX;
+				variables.letterBag ['y'] = variables.numY;
+				variables.letterBag ['z'] = variables.numZ;
+
+                foreach (KeyValuePair<char, int> entry in variables.letterBag)
+                {
+                    //Debug.Log ("Adding " + entry.Value + " " + entry.Key + "'s to letterBag");
+                    variables.totalLetters += entry.Value;
+                }
+                variables.totalVowels = variables.numA + variables.numE + variables.numI + variables.numO + variables.numU;
+		}
+
+
 }
-
